@@ -214,3 +214,36 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# QuantBase ML Models & Data
+# Large model files (use Git LFS if needed)
+*.pkl
+*.ckpt
+*.pt
+*.pth
+*.h5
+*.joblib
+
+# Large data files
+ml_models/data/raw/
+ml_models/data/predictions/*.csv
+ml_models/data/processed/
+
+# Colab temporary files
+*.ipynb_checkpoints/
+.ipynb_checkpoints/
+
+# Model training outputs
+ml_models/models/lightning_logs/
+ml_models/models/tensorboard_logs/
+ml_models/models/checkpoints/
+
+# Keep important files
+!ml_models/data/config/
+!ml_models/docs/
+!ml_models/README.md
+!ml_models/COLAB_DOWNLOAD_GUIDE.md
+
+# Trading data exports (comment out if you want to commit small files)
+# ml_models/data/predictions/MASTER_*.csv
+# ml_models/data/predictions/FUTURE_*.csv
