@@ -6,6 +6,7 @@ and Claude AI-powered parameter personalization.
 """
 
 import sys
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -34,7 +35,7 @@ class BotParameters(BaseModel):
 class CreateBotRequest(BaseModel):
     """Request model for creating a new bot."""
     name: str = Field(..., min_length=1, max_length=100, description="Bot name")
-    description: str = Field(..., min_length=1, max_length=500, description="Bot description")
+    description: str = Field("", max_length=500, description="Bot description (optional)")
     parameters: BotParameters = Field(..., description="Bot trading parameters")
     creator_username: str = Field(..., description="Username of bot creator")
 
@@ -137,12 +138,38 @@ def convert_to_backend_params(frontend_params: BotParameters) -> Dict[str, Any]:
 
 
 def convert_from_backend_params(backend_params: Dict[str, Any]) -> BotParameters:
-    """Convert backend parameters to BotParameters."""
+    """Convert backend parameters to BotParameters with validation and clamping."""
+    # Clamp values to ensure they're within valid ranges
+    window = backend_params.get("window", 15)
+    window_original = window
+    window = max(5, min(30, int(window)))  # Clamp between 5 and 30
+    
+    k_sigma = backend_params.get("k_sigma", 1.5)
+    k_sigma_original = k_sigma
+    k_sigma = max(0.5, min(3.0, float(k_sigma)))  # Clamp between 0.5 and 3.0
+    
+    risk_factor = backend_params.get("risk_factor", 0.5)
+    risk_factor_original = risk_factor
+    risk_factor = max(0.0, min(1.0, float(risk_factor)))  # Clamp between 0.0 and 1.0
+    
+    base_trade_size = backend_params.get("base_trade_size", 0.002)
+    base_trade_size_original = base_trade_size
+    base_trade_size = max(0.0001, min(0.01, float(base_trade_size)))  # Clamp between 0.0001 and 0.01
+    
+    # Log any clamping that occurred
+    if window_original != window or k_sigma_original != k_sigma or risk_factor_original != risk_factor or base_trade_size_original != base_trade_size:
+        logging.warning(
+            f"Clamped parameter values: window={window_original}->{window}, "
+            f"k_sigma={k_sigma_original}->{k_sigma}, "
+            f"risk_factor={risk_factor_original}->{risk_factor}, "
+            f"base_trade_size={base_trade_size_original}->{base_trade_size}"
+        )
+    
     return BotParameters(
-        window=backend_params.get("window", 15),
-        k_sigma=backend_params.get("k_sigma", 1.5),
-        risk_factor=backend_params.get("risk_factor", 0.5),
-        base_trade_size=backend_params.get("base_trade_size", 0.002)
+        window=window,
+        k_sigma=k_sigma,
+        risk_factor=risk_factor,
+        base_trade_size=base_trade_size
     )
 
 

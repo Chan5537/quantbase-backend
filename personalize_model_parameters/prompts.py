@@ -22,44 +22,49 @@ You have control over the following 4 bot parameters:
 
 1. WINDOW (rolling lookback):
    - Type: Integer
-   - Range: 5-30 typically
+   - Valid Range: 5-30 (STRICT - values outside this range will cause errors)
    - Description: Number of time periods to look back for calculating statistics
    - Lower values = more responsive to recent price changes
    - Higher values = smoother, less sensitive to recent movements
    - Suggested range: 10-20 for most use cases
+   - CRITICAL: Must be an integer between 5 and 30 inclusive
 
 2. K_SIGMA (standard deviation multiplier):
    - Type: Float
-   - Range: 0.5-3.0 typically
+   - Valid Range: 0.5-3.0 (STRICT - values outside this range will cause errors)
    - Description: Multiplier for standard deviation in volatility calculations
    - Lower values = tighter bands, more trades, higher sensitivity
    - Higher values = wider bands, fewer trades, lower sensitivity
    - Suggested range: 1.0-2.0 for most use cases
+   - CRITICAL: Must be a float between 0.5 and 3.0 inclusive
 
 3. RISK_FACTOR (risk appetite):
    - Type: Float
-   - Range: 0.0-1.0
+   - Valid Range: 0.0-1.0 (STRICT - values outside this range will cause errors)
    - Description: Controls risk behavior
    - 0.0 = safe/conservative (smaller positions, more cautious)
    - 1.0 = aggressive (larger positions, more risk-taking)
    - Suggested: 0.3-0.7 for most traders
+   - CRITICAL: Must be a float between 0.0 and 1.0 inclusive
 
 4. BASE_TRADE_SIZE (position sizing):
    - Type: Float
-   - Range: 0.0001-0.01 typically
+   - Valid Range: 0.0001-0.01 (STRICT - values outside this range will cause errors)
    - Description: Base size of trades in the asset being traded
    - Lower values = smaller positions, lower risk
    - Higher values = larger positions, higher risk
    - Suggested: 0.0005-0.002 for most use cases
+   - CRITICAL: Must be a float between 0.0001 and 0.01 inclusive (DO NOT exceed 0.01)
 
 GUIDELINES FOR MODIFICATION:
-1. Adjust parameters to align with user's stated risk tolerance and goals
-2. Ensure parameters work together harmoniously
-3. Consider that window and k_sigma affect sensitivity together (shorter window + lower k_sigma = very sensitive)
-4. Risk factor and base trade size both affect position sizing - keep them proportional
-5. If user asks for more aggressive trading, you can: increase risk_factor, increase base_trade_size, decrease k_sigma, or decrease window
-6. If user asks for more conservative trading, you can: decrease risk_factor, decrease base_trade_size, increase k_sigma, or increase window
-7. Document your reasoning for all changes
+1. CRITICAL: All parameter values MUST be within their valid ranges shown above - values outside these ranges will cause the system to fail
+2. Adjust parameters to align with user's stated risk tolerance and goals
+3. Ensure parameters work together harmoniously
+4. Consider that window and k_sigma affect sensitivity together (shorter window + lower k_sigma = very sensitive)
+5. Risk factor and base trade size both affect position sizing - keep them proportional
+6. If user asks for more aggressive trading, you can: increase risk_factor, increase base_trade_size, decrease k_sigma, or decrease window
+7. If user asks for more conservative trading, you can: decrease risk_factor, decrease base_trade_size, increase k_sigma, or increase window
+8. Document your reasoning for all changes
 
 OUTPUT FORMAT:
 Return a JSON object with the following structure:
@@ -120,11 +125,13 @@ Your task:
 3. Apply the changes while maintaining configuration consistency
 4. Warn about any potential risks introduced by the changes
 
-PARAMETER DESCRIPTIONS:
-- window: Rolling lookback period (5-30, typical 10-20)
-- k_sigma: Standard deviation multiplier (0.5-3.0, typical 1.0-2.0)
-- risk_factor: Risk appetite 0-1 (0=safe, 1=aggressive, typical 0.3-0.7)
-- base_trade_size: Base position size (0.0001-0.01, typical 0.0005-0.002)
+PARAMETER DESCRIPTIONS (CRITICAL: All values MUST be within the specified ranges):
+- window: Rolling lookback period - MUST be integer 5-30 (typical 10-20)
+- k_sigma: Standard deviation multiplier - MUST be float 0.5-3.0 (typical 1.0-2.0)
+- risk_factor: Risk appetite - MUST be float 0.0-1.0 (0=safe, 1=aggressive, typical 0.3-0.7)
+- base_trade_size: Base position size - MUST be float 0.0001-0.01 (typical 0.0005-0.002, DO NOT exceed 0.01)
+
+IMPORTANT: Values outside these ranges will cause errors. Ensure all parameter values fall strictly within their specified ranges.
 
 Return a JSON response with:
 {{
