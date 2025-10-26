@@ -24,15 +24,11 @@ from api.database import get_database, db_manager
 
 # Pydantic models for request/response validation
 class BotParameters(BaseModel):
-    """Bot trading parameters."""
-    kSig: float = Field(..., ge=0.5, le=5.0, description="K-Signal sensitivity")
-    window: int = Field(..., ge=5, le=50, description="Analysis window periods")
-    stopLoss: float = Field(..., ge=0.5, le=10.0, description="Stop loss percentage")
-    takeProfit: float = Field(..., ge=1.0, le=20.0, description="Take profit percentage")
-    positionSize: float = Field(default=0.01, ge=0.01, le=1.0, description="Position size as fraction")
-    riskLevel: str = Field(default="moderate", description="Risk level: conservative, moderate, aggressive")
-    tradingHours: str = Field(default="24/7", description="Trading schedule")
-    customHours: Optional[str] = Field(None, description="Custom trading hours")
+    """Bot trading parameters - matches personalize_model_parameters backend format."""
+    window: int = Field(..., ge=5, le=30, description="Rolling lookback period (5-30, typical 10-20)")
+    k_sigma: float = Field(..., ge=0.5, le=3.0, description="Standard deviation multiplier (0.5-3.0, typical 1.0-2.0)")
+    risk_factor: float = Field(..., ge=0.0, le=1.0, description="Risk appetite (0.0-1.0, 0.0=conservative, 1.0=aggressive)")
+    base_trade_size: float = Field(..., ge=0.0001, le=0.01, description="Base trade size (0.0001-0.01, typical 0.0005-0.002)")
 
 
 class CreateBotRequest(BaseModel):
@@ -130,73 +126,24 @@ def get_claude_processor() -> PersonalizationProcessor:
     return _claude_processor
 
 
-def convert_frontend_to_backend_params(frontend_params: BotParameters) -> Dict[str, Any]:
-    """Convert frontend bot parameters to backend format."""
+def convert_to_backend_params(frontend_params: BotParameters) -> Dict[str, Any]:
+    """Convert BotParameters to backend format (returns dict of the same values)."""
     return {
         "window": frontend_params.window,
-        "k_sigma": frontend_params.kSig,
-        "risk_factor": _map_risk_level_to_factor(frontend_params.riskLevel),
-        "base_trade_size": frontend_params.positionSize
+        "k_sigma": frontend_params.k_sigma,
+        "risk_factor": frontend_params.risk_factor,
+        "base_trade_size": frontend_params.base_trade_size
     }
 
 
-def convert_backend_to_frontend_params(backend_params: Dict[str, Any]) -> BotParameters:
-    """Convert backend bot parameters to frontend format."""
-    # Get base_trade_size and ensure it meets minimum validation requirement
-    base_trade_size = backend_params.get("base_trade_size", 0.01)
-    
-    # Ensure the value meets the minimum requirement (>= 0.01)
-    # Scale up if necessary
-    if base_trade_size < 0.01:
-        # Try scaling by 10 first
-        if base_trade_size * 10 >= 0.01:
-            base_trade_size = base_trade_size * 10
-        else:
-            # If still too small, set to minimum
-            base_trade_size = 0.01
-    
-    # Final safety check - ensure we never pass a value less than 0.01
-    position_size = max(0.01, base_trade_size)
-    
+def convert_from_backend_params(backend_params: Dict[str, Any]) -> BotParameters:
+    """Convert backend parameters to BotParameters."""
     return BotParameters(
-        kSig=backend_params.get("k_sigma", 2.0),
-        window=backend_params.get("window", 20),
-        stopLoss=_calculate_stop_loss_from_risk(backend_params.get("risk_factor", 0.5)),
-        takeProfit=_calculate_take_profit_from_risk(backend_params.get("risk_factor", 0.5)),
-        positionSize=position_size,
-        riskLevel=_map_factor_to_risk_level(backend_params.get("risk_factor", 0.5)),
-        tradingHours="24/7"
+        window=backend_params.get("window", 15),
+        k_sigma=backend_params.get("k_sigma", 1.5),
+        risk_factor=backend_params.get("risk_factor", 0.5),
+        base_trade_size=backend_params.get("base_trade_size", 0.002)
     )
-
-
-def _map_risk_level_to_factor(risk_level: str) -> float:
-    """Map frontend risk level to backend risk factor."""
-    mapping = {
-        "conservative": 0.3,
-        "moderate": 0.5,
-        "aggressive": 0.7
-    }
-    return mapping.get(risk_level, 0.5)
-
-
-def _map_factor_to_risk_level(risk_factor: float) -> str:
-    """Map backend risk factor to frontend risk level."""
-    if risk_factor <= 0.4:
-        return "conservative"
-    elif risk_factor <= 0.6:
-        return "moderate"
-    else:
-        return "aggressive"
-
-
-def _calculate_stop_loss_from_risk(risk_factor: float) -> float:
-    """Calculate stop loss percentage from risk factor."""
-    return 1.5 + (risk_factor * 2.0)  # Range: 1.5% to 3.5%
-
-
-def _calculate_take_profit_from_risk(risk_factor: float) -> float:
-    """Calculate take profit percentage from risk factor."""
-    return 3.0 + (risk_factor * 3.0)  # Range: 3.0% to 6.0%
 
 
 @router.post("/create", response_model=BotResponse)
@@ -232,7 +179,7 @@ async def create_bot(request: CreateBotRequest, db=Depends(get_database)):
                 "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={request.creator_username}"
             },
             "parameters": request.parameters.dict(),
-            "backend_parameters": convert_frontend_to_backend_params(request.parameters),
+            "backend_parameters": convert_to_backend_params(request.parameters),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
             "is_active": True
@@ -412,9 +359,9 @@ async def personalize_bot(
         # Get current backend parameters
         current_backend_params = bot.get("backend_parameters", {
             "window": 15,
-            "k_sigma": 1.2,
+            "k_sigma": 1.5,
             "risk_factor": 0.5,
-            "base_trade_size": 0.01  # Changed from 0.001 to meet minimum validation
+            "base_trade_size": 0.01
         })
         
         # Personalize with Claude
@@ -427,7 +374,7 @@ async def personalize_bot(
         personalized_backend_params = personalization_result.get("modified_parameters", current_backend_params)
         
         # Convert to frontend format
-        personalized_frontend_params = convert_backend_to_frontend_params(personalized_backend_params)
+        personalized_frontend_params = convert_from_backend_params(personalized_backend_params)
         
         # Update bot in database
         update_data = {
@@ -496,9 +443,9 @@ async def personalize_standalone(
         # Use default parameters as starting point
         default_backend_params = {
             "window": 15,
-            "k_sigma": 1.2,
+            "k_sigma": 1.5,
             "risk_factor": 0.5,
-            "base_trade_size": 0.01  # Changed from 0.001 to meet minimum validation
+            "base_trade_size": 0.01
         }
         
         # Personalize with Claude
@@ -511,7 +458,7 @@ async def personalize_standalone(
         personalized_backend_params = personalization_result.get("modified_parameters", default_backend_params)
         
         # Convert to frontend format
-        personalized_frontend_params = convert_backend_to_frontend_params(personalized_backend_params)
+        personalized_frontend_params = convert_from_backend_params(personalized_backend_params)
         
         # Calculate processing time
         processing_time = int((time.time() - start_time) * 1000)
@@ -572,9 +519,9 @@ async def modify_bot(
         # Get current backend parameters
         current_backend_params = bot.get("backend_parameters", {
             "window": 15,
-            "k_sigma": 1.2,
+            "k_sigma": 1.5,
             "risk_factor": 0.5,
-            "base_trade_size": 0.01  # Changed from 0.001 to meet minimum validation
+            "base_trade_size": 0.002
         })
         
         # Modify with Claude
@@ -587,7 +534,7 @@ async def modify_bot(
         modified_backend_params = modification_result.get("modified_parameters", current_backend_params)
         
         # Convert to frontend format
-        modified_frontend_params = convert_backend_to_frontend_params(modified_backend_params)
+        modified_frontend_params = convert_from_backend_params(modified_backend_params)
         
         # Update bot in database
         update_data = {
