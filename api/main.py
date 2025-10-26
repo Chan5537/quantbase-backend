@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 QuantBase API - FastAPI Application Entry Point.
 
@@ -21,6 +22,7 @@ import time
 sys.path.append(str(Path(__file__).parent.parent))
 
 from api.models_api import router as models_router
+from api.bots_api import router as bots_router
 from api.database import connect_to_mongo, close_mongo_connection, ping_database
 from ml_models.predict import ModelPredictor
 
@@ -115,6 +117,12 @@ app = FastAPI(
     * `/api/predict` - Generate predictions (POST)
     * `/api/predict/{model}/{crypto}` - Generate predictions (GET)
     * `/api/compare/{crypto}` - Compare all models
+    * `/api/bots/create` - Create new trading bot (POST)
+    * `/api/bots/` - List all bots (GET)
+    * `/api/bots/{bot_id}` - Get specific bot (GET)
+    * `/api/bots/{bot_id}/personalize` - Personalize bot with Claude AI (POST)
+    * `/api/bots/{bot_id}/modify` - Modify bot parameters interactively (POST)
+    * `/api/bots/{bot_id}` - Delete bot (DELETE)
     * `/health` - API health check
     
     ## Support
@@ -218,6 +226,7 @@ async def internal_server_error_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(models_router)
+app.include_router(bots_router)
 
 
 # Root endpoint
