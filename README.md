@@ -4,7 +4,7 @@
 
 Quantbase is a machine learning-powered cryptocurrency trading prediction API that combines multiple ML models with Claude AI to create, manage, and personalize automated trading bots.
 
-## 🚀 Features
+## Features
 
 - **Multi-Model ML Predictions**: Ensemble approach using LightGBM, XGBoost, Random Forest, and Neural Networks
 - **Real-Time Price Predictions**: Get cryptocurrency price predictions powered by advanced ML models
@@ -13,7 +13,7 @@ Quantbase is a machine learning-powered cryptocurrency trading prediction API th
 - **MongoDB Persistence**: Robust data storage for bots, predictions, and trading history
 - **RESTful API**: Clean, well-documented API built with FastAPI
 
-## 🏗️ Tech Stack
+## Tech Stack
 
 - **Framework**: FastAPI
 - **Server**: Uvicorn (ASGI)
@@ -22,7 +22,7 @@ Quantbase is a machine learning-powered cryptocurrency trading prediction API th
 - **AI**: Claude API (Anthropic)
 - **Deployment**: Railway (recommended)
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Python 3.8+
 - MongoDB instance (local or cloud)
