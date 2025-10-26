@@ -1,79 +1,135 @@
-# QuantBase API
+# Quantbase: Democratizing algorithmic trading with AI
 
-Machine learning-powered cryptocurrency trading prediction API.
+> The world's first AI-powered Algo Trading Bot Marketplace
 
-## 🚀 Quick Start
+Quantbase is a machine learning-powered cryptocurrency trading prediction API that combines multiple ML models with Claude AI to create, manage, and personalize automated trading bots.
 
-### Deploy to Railway (Recommended)
+## 🚀 Features
 
-Railway is perfect for this project because it:
-- Has generous size limits for ML models
-- Provides always-on VMs (no cold starts)
-- Includes one-click MongoDB setup
-- Offers a free tier
+- **Multi-Model ML Predictions**: Ensemble approach using LightGBM, XGBoost, Random Forest, and Neural Networks
+- **Real-Time Price Predictions**: Get cryptocurrency price predictions powered by advanced ML models
+- **Trading Bot Marketplace**: Create, customize, and manage automated trading bots
+- **Claude AI Integration**: Personalize trading bots with natural language using Anthropic's Claude
+- **MongoDB Persistence**: Robust data storage for bots, predictions, and trading history
+- **RESTful API**: Clean, well-documented API built with FastAPI
 
-**5-minute deploy**: See [QUICK_START_RAILWAY.md](QUICK_START_RAILWAY.md)
+## 🏗️ Tech Stack
+
+- **Framework**: FastAPI
+- **Server**: Uvicorn (ASGI)
+- **Database**: MongoDB
+- **ML Models**: LightGBM, XGBoost, Random Forest, Neural Networks
+- **AI**: Claude API (Anthropic)
+- **Deployment**: Railway (recommended)
+
+## 📋 Prerequisites
+
+- Python 3.8+
+- MongoDB instance (local or cloud)
+- Anthropic Claude API key
+
+## ⚡ Quick Start
 
 ### Local Development
 
 ```bash
+# Clone the repository
+git clone https://github.com/Chan5537/quantbase-backend.git
+cd quantbase-backend
+
 # Install dependencies
 pip install -r requirements.txt
 
 # Set up environment variables
 cp .env.example .env
-# Edit .env with your keys
+# Edit .env with your MongoDB URI and Claude API key
 
 # Run the API
-python -m uvicorn api.main:app --port 8000
+python -m uvicorn api.main:app --reload --port 8000
 ```
 
-API will be available at http://localhost:8000
-
-## 📚 Documentation
-
-- **Quick Start**: [QUICK_START_RAILWAY.md](QUICK_START_RAILWAY.md)
-- **Full Deployment Guide**: [DEPLOY_TO_RAILWAY.md](DEPLOY_TO_RAILWAY.md)
-- **Environment Variables**: [RAILWAY_ENV_VARS.md](RAILWAY_ENV_VARS.md)
-- **API Documentation**: [README_API.md](README_API.md)
-
-## 🌟 Features
-
-- Multiple ML models (LightGBM, XGBoost, Random Forest, Neural Networks)
-- Real-time cryptocurrency price predictions
-- Trading bot management
-- Claude AI-powered bot personalization
-- MongoDB integration for data persistence
-
-## 📖 API Endpoints
-
-- `GET /docs` - Interactive API documentation
-- `GET /health` - Health check
-- `POST /api/predict` - Generate ML predictions
-- `GET /api/bots` - List all bots
-- `POST /api/bots/create` - Create new bot
+The API will be available at `http://localhost:8000`
 
 ## 🔧 Configuration
 
-Required environment variables:
+### Required Environment Variables
 
-- `MONGODB_URI` - MongoDB connection string
-- `CLAUDE_API_KEY` - Anthropic API key
+```env
+MONGODB_URI=your_mongodb_connection_string
+CLAUDE_API_KEY=your_anthropic_api_key
+```
 
-Optional:
+### Optional Environment Variables
 
-- `ALLOWED_ORIGINS` - CORS origins (default: localhost:3000)
-- `ENVIRONMENT` - Environment name (default: development)
-- `API_VERSION` - API version (default: 1.0.0)
+```env
+ALLOWED_ORIGINS=http://localhost:3000,https://yourdomain.com
+ENVIRONMENT=development
+API_VERSION=1.0.0
+```
 
-## 📦 Tech Stack
+## API Documentation
 
-- **FastAPI** - Modern Python web framework
-- **Uvicorn** - ASGI server
-- **MongoDB** - Database
-- **LightGBM, XGBoost** - ML models
-- **Claude AI** - Bot personalization
+### Core Endpoints
 
-## 📝 License
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/docs` | Interactive Swagger UI documentation |
+| GET | `/health` | Health check endpoint |
+| POST | `/api/predict` | Generate ML-powered price predictions |
+| GET | `/api/bots` | List all trading bots |
+| POST | `/api/bots/create` | Create a new trading bot |
 
-MIT
+### Interactive Documentation
+
+Once the API is running, visit:
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+For detailed API documentation, see [README_API.md](README_API.md)
+
+## Machine Learning Models
+
+Quantbase uses an ensemble of state-of-the-art ML models:
+
+1. **LightGBM**: Fast gradient boosting framework
+2. **XGBoost**: Extreme gradient boosting for high accuracy
+3. **Random Forest**: Ensemble learning for robust predictions
+4. **Neural Networks**: Deep learning for complex pattern recognition
+
+Models are trained on historical cryptocurrency data and continuously updated for optimal performance.
+
+## Use Cases
+
+- Create AI-powered trading bots with custom strategies
+- Get real-time cryptocurrency price predictions
+- Backtest trading algorithms
+- Personalize bot behavior using natural language (Claude AI)
+- Build a marketplace of trading strategies
+
+## Development
+
+### Project Structure
+
+```
+quantbase-backend/
+├── api/
+│   ├── main.py              # FastAPI application
+│   ├── models/              # ML model implementations
+│   ├── routes/              # API route handlers
+│   └── services/            # Business logic
+├── requirements.txt         # Python dependencies
+├── .env.example            # Environment variables template
+└── README.md               # This file
+```
+
+### Running Tests
+
+```bash
+pytest
+```
+
+## Contributing
+
+This is a hackathon project! Contributions, issues, and feature requests are welcome.
+
+**Quantbase** - Democratizing algorithmic trading with AI
