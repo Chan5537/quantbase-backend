@@ -38,6 +38,7 @@ class CreateBotRequest(BaseModel):
     description: str = Field("", max_length=500, description="Bot description (optional)")
     parameters: BotParameters = Field(..., description="Bot trading parameters")
     creator_username: str = Field(..., description="Username of bot creator")
+    model_type: Optional[str] = Field("momentum", description="Trading model type (momentum or mean_reversion) - hidden from user")
 
 
 class BotResponse(BaseModel):
@@ -127,32 +128,22 @@ def get_claude_processor() -> PersonalizationProcessor:
     return _claude_processor
 
 
-def convert_to_backend_params(frontend_params: BotParameters) -> Dict[str, Any]:
-    """Convert BotParameters to backend format (returns dict of the same values)."""
-    return {
-        "window": frontend_params.window,
-        "k_sigma": frontend_params.k_sigma,
-        "risk_factor": frontend_params.risk_factor,
-        "base_trade_size": frontend_params.base_trade_size
-    }
-
-
-def convert_from_backend_params(backend_params: Dict[str, Any]) -> BotParameters:
-    """Convert backend parameters to BotParameters with validation and clamping."""
+def validate_and_clamp_parameters(params: Dict[str, Any]) -> BotParameters:
+    """Validate and clamp parameters to ensure they're within valid ranges."""
     # Clamp values to ensure they're within valid ranges
-    window = backend_params.get("window", 15)
+    window = params.get("window", 15)
     window_original = window
     window = max(5, min(30, int(window)))  # Clamp between 5 and 30
     
-    k_sigma = backend_params.get("k_sigma", 1.5)
+    k_sigma = params.get("k_sigma", 1.5)
     k_sigma_original = k_sigma
     k_sigma = max(0.5, min(3.0, float(k_sigma)))  # Clamp between 0.5 and 3.0
     
-    risk_factor = backend_params.get("risk_factor", 0.5)
+    risk_factor = params.get("risk_factor", 0.5)
     risk_factor_original = risk_factor
     risk_factor = max(0.0, min(1.0, float(risk_factor)))  # Clamp between 0.0 and 1.0
     
-    base_trade_size = backend_params.get("base_trade_size", 0.002)
+    base_trade_size = params.get("base_trade_size", 0.002)
     base_trade_size_original = base_trade_size
     base_trade_size = max(0.0001, min(0.01, float(base_trade_size)))  # Clamp between 0.0001 and 0.01
     
@@ -205,8 +196,8 @@ async def create_bot(request: CreateBotRequest, db=Depends(get_database)):
                 "username": request.creator_username,
                 "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={request.creator_username}"
             },
-            "parameters": request.parameters.dict(),
-            "backend_parameters": convert_to_backend_params(request.parameters),
+            "parameters": request.parameters.dict(),  # Single source of truth - no need for backend_parameters
+            "model_type": request.model_type,  # Use provided model_type or default to "momentum"
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
             "is_active": True
@@ -383,8 +374,8 @@ async def personalize_bot(
             user_preferences["user_request"] = request.natural_language_input
             user_preferences["preferences_description"] = request.natural_language_input
         
-        # Get current backend parameters
-        current_backend_params = bot.get("backend_parameters", {
+        # Get current parameters from bot
+        current_params = bot.get("parameters", {
             "window": 15,
             "k_sigma": 1.5,
             "risk_factor": 0.5,
@@ -393,20 +384,23 @@ async def personalize_bot(
         
         # Personalize with Claude
         personalization_result = processor.personalize_bot(
-            default_parameters=current_backend_params,
+            default_parameters=current_params,
             user_preferences=user_preferences
         )
         
         # Extract personalized parameters
-        personalized_backend_params = personalization_result.get("modified_parameters", current_backend_params)
+        personalized_params = personalization_result.get("modified_parameters", current_params)
         
-        # Convert to frontend format
-        personalized_frontend_params = convert_from_backend_params(personalized_backend_params)
+        # Extract model type (if provided by Claude)
+        model_type = personalization_result.get("model_type", "momentum")  # Default to momentum
+        
+        # Convert to validated frontend format (clamping applied)
+        personalized_frontend_params = validate_and_clamp_parameters(personalized_params)
         
         # Update bot in database
         update_data = {
-            "parameters": personalized_frontend_params.dict(),
-            "backend_parameters": personalized_backend_params,
+            "parameters": personalized_frontend_params.dict(),  # Clamped/validated values
+            "model_type": model_type,
             "updated_at": datetime.utcnow()
         }
         
@@ -468,7 +462,7 @@ async def personalize_standalone(
             user_preferences["preferences_description"] = request.natural_language_input
         
         # Use default parameters as starting point
-        default_backend_params = {
+        default_params = {
             "window": 15,
             "k_sigma": 1.5,
             "risk_factor": 0.5,
@@ -477,18 +471,24 @@ async def personalize_standalone(
         
         # Personalize with Claude
         personalization_result = processor.personalize_bot(
-            default_parameters=default_backend_params,
+            default_parameters=default_params,
             user_preferences=user_preferences
         )
         
         # Extract personalized parameters
-        personalized_backend_params = personalization_result.get("modified_parameters", default_backend_params)
+        personalized_params = personalization_result.get("modified_parameters", default_params)
         
-        # Convert to frontend format
-        personalized_frontend_params = convert_from_backend_params(personalized_backend_params)
+        # Extract model type (if provided by Claude)
+        model_type = personalization_result.get("model_type", "momentum")  # Default to momentum
+        
+        # Convert to validated frontend format (clamping applied)
+        personalized_frontend_params = validate_and_clamp_parameters(personalized_params)
         
         # Calculate processing time
         processing_time = int((time.time() - start_time) * 1000)
+        
+        # Note: model_type is stored internally but not exposed in the response
+        # This is intentional to keep it hidden from the user
         
         return StandalonePersonalizeResponse(
             personalized_parameters=personalized_frontend_params,
@@ -543,8 +543,8 @@ async def modify_bot(
         # Get Claude processor
         processor = get_claude_processor()
         
-        # Get current backend parameters
-        current_backend_params = bot.get("backend_parameters", {
+        # Get current parameters from bot
+        current_params = bot.get("parameters", {
             "window": 15,
             "k_sigma": 1.5,
             "risk_factor": 0.5,
@@ -553,20 +553,26 @@ async def modify_bot(
         
         # Modify with Claude
         modification_result = processor.modify_parameters_interactively(
-            current_parameters=current_backend_params,
+            current_parameters=current_params,
             user_request=request.user_request
         )
         
         # Extract modified parameters
-        modified_backend_params = modification_result.get("modified_parameters", current_backend_params)
+        modified_params = modification_result.get("modified_parameters", current_params)
         
-        # Convert to frontend format
-        modified_frontend_params = convert_from_backend_params(modified_backend_params)
+        # Extract model type (if changed by Claude, otherwise keep existing)
+        if "model_type" in modification_result and modification_result["model_type"] != "unchanged":
+            model_type = modification_result.get("model_type", bot.get("model_type", "momentum"))
+        else:
+            model_type = bot.get("model_type", "momentum")  # Keep existing or default to momentum
+        
+        # Convert to validated frontend format (clamping applied)
+        modified_frontend_params = validate_and_clamp_parameters(modified_params)
         
         # Update bot in database
         update_data = {
-            "parameters": modified_frontend_params.dict(),
-            "backend_parameters": modified_backend_params,
+            "parameters": modified_frontend_params.dict(),  # Clamped/validated values
+            "model_type": model_type,
             "updated_at": datetime.utcnow()
         }
         

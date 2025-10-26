@@ -9,13 +9,33 @@ CONTEXT:
 You are working with an algorithmic crypto trading marketplace where:
 - Users run algorithmic trading bots with configurable parameters
 - Users want to customize bot behavior to match their trading style and risk tolerance
+- Two trading model types are available: momentum and mean_reversion
 
 YOUR TASK:
-Analyze the user's preferences and modify the default bot parameters to match their trading style, risk tolerance, and objectives.
+1. Choose the appropriate trading model type (momentum or mean_reversion) based on user preferences
+2. Modify the default bot parameters to match their trading style, risk tolerance, and objectives
 
 INPUTS PROVIDED:
 1. Default Bot Parameters: {default_parameters_json}
 2. User Preferences: {user_preferences_json}
+
+MODEL TYPE SELECTION:
+You must choose between two trading model types:
+1. MOMENTUM (default):
+   - Best for trending markets
+   - Follows price momentum and trends
+   - Buys when price is rising, sells when falling
+   - Good for strong directional moves
+   - Use when user mentions: "trending", "momentum", "following trends", "breakout", "swing trading"
+
+2. MEAN_REVERSION:
+   - Best for range-bound or choppy markets
+   - Assumes prices return to average
+   - Buys dips, sells rallies
+   - Good for sideways or volatile markets
+   - Use when user mentions: "mean reversion", "range trading", "support/resistance", "buy dips", "sell rallies", "choppy market"
+
+DEFAULT: Use momentum unless user clearly indicates mean reversion preferences.
 
 PARAMETERS YOU CAN MODIFY:
 You have control over the following 4 bot parameters:
@@ -69,6 +89,7 @@ GUIDELINES FOR MODIFICATION:
 OUTPUT FORMAT:
 Return a JSON object with the following structure:
 {{
+    "model_type": "momentum|mean_reversion",
     "modified_parameters": {{
         "window": <integer>,
         "k_sigma": <float>,
@@ -83,6 +104,7 @@ Return a JSON object with the following structure:
             "reasoning": "explanation of why this was changed"
         }}
     ],
+    "model_selection_reasoning": "Explanation of why you chose momentum or mean_reversion",
     "risk_assessment": {{
         "overall_risk_level": "low|medium|high|very_high",
         "risk_factors": [
@@ -121,9 +143,15 @@ USER REQUEST:
 
 Your task:
 1. Understand what the user wants to change
-2. Identify which of the 4 parameters need modification (window, k_sigma, risk_factor, base_trade_size)
-3. Apply the changes while maintaining configuration consistency
-4. Warn about any potential risks introduced by the changes
+2. If the user mentions changing the trading strategy, select the appropriate model_type (momentum or mean_reversion)
+3. Identify which of the 4 parameters need modification (window, k_sigma, risk_factor, base_trade_size)
+4. Apply the changes while maintaining configuration consistency
+5. Warn about any potential risks introduced by the changes
+
+MODEL TYPE SELECTION:
+Choose between two trading model types based on user request:
+- MOMENTUM (default): For trending markets, follows momentum
+- MEAN_REVERSION: For range-bound markets, buy dips sell rallies
 
 PARAMETER DESCRIPTIONS (CRITICAL: All values MUST be within the specified ranges):
 - window: Rolling lookback period - MUST be integer 5-30 (typical 10-20)
@@ -135,6 +163,7 @@ IMPORTANT: Values outside these ranges will cause errors. Ensure all parameter v
 
 Return a JSON response with:
 {{
+    "model_type": "momentum|mean_reversion|unchanged",
     "modified_parameters": {{ 
         "window": <integer>,
         "k_sigma": <float>,
