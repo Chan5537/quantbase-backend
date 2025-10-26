@@ -20,7 +20,12 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from personalize_model_parameters.claude_processor import PersonalizationProcessor
 from personalize_model_parameters.config import PersonalizationConfig
-from api.database import get_database, db_manager
+from api.database import (
+    get_database, 
+    db_manager,
+    get_marketplace_database,
+    get_custom_database
+)
 
 
 # Pydantic models for request/response validation
@@ -165,13 +170,13 @@ def validate_and_clamp_parameters(params: Dict[str, Any]) -> BotParameters:
 
 
 @router.post("/create", response_model=BotResponse)
-async def create_bot(request: CreateBotRequest, db=Depends(get_database)):
+async def create_bot(request: CreateBotRequest, db=Depends(get_custom_database)):
     """
-    Create a new trading bot.
+    Create a new trading bot in custom_bots_db (user-created bots).
     
     Args:
         request: Bot creation request
-        db: Database dependency
+        db: Database dependency (custom_bots_db)
         
     Returns:
         Created bot information
@@ -203,7 +208,7 @@ async def create_bot(request: CreateBotRequest, db=Depends(get_database)):
             "is_active": True
         }
         
-        # Save to database
+        # Save to custom_bots_db database
         collection = db['bots']
         result = await collection.insert_one(bot_doc)
         
@@ -232,50 +237,75 @@ async def create_bot(request: CreateBotRequest, db=Depends(get_database)):
 @router.get("/", response_model=List[BotResponse])
 async def list_bots(
     creator_username: Optional[str] = None,
-    db=Depends(get_database)
+    marketplace_db=Depends(get_marketplace_database),
+    custom_db=Depends(get_custom_database)
 ):
     """
-    List all bots, optionally filtered by creator.
+    List all bots from both marketplace (bots_db) and custom (custom_bots_db) databases.
+    Optionally filtered by creator.
     
     Args:
         creator_username: Optional filter by creator username
-        db: Database dependency
+        marketplace_db: Marketplace database (bots_db)
+        custom_db: Custom bots database (custom_bots_db)
         
     Returns:
-        List of bots
+        List of bots from both databases
     """
-    if db is None:
+    if marketplace_db is None and custom_db is None:
         raise HTTPException(
             status_code=503,
             detail="Database not available. Bot listing requires database connection."
         )
     
     try:
-        collection = db['bots']
+        bot_responses = []
         
         # Build query filter
         query = {"is_active": True}
         if creator_username:
             query["creator.username"] = creator_username
         
-        # Get bots
-        cursor = collection.find(query).sort("created_at", -1)
-        bots = await cursor.to_list(length=None)
+        # Query marketplace bots (bots_db)
+        if marketplace_db:
+            marketplace_collection = marketplace_db['bots']
+            cursor = marketplace_collection.find(query).sort("created_at", -1)
+            marketplace_bots = await cursor.to_list(length=None)
+            
+            for bot in marketplace_bots:
+                bot_responses.append(BotResponse(
+                    id=bot["id"],
+                    name=bot["name"],
+                    description=bot["description"],
+                    image=bot["image"],
+                    creator=bot["creator"],
+                    parameters=BotParameters(**bot["parameters"]),
+                    created_at=bot["created_at"].isoformat(),
+                    updated_at=bot["updated_at"].isoformat(),
+                    is_active=bot["is_active"]
+                ))
         
-        # Convert to response format
-        bot_responses = []
-        for bot in bots:
-            bot_responses.append(BotResponse(
-                id=bot["id"],
-                name=bot["name"],
-                description=bot["description"],
-                image=bot["image"],
-                creator=bot["creator"],
-                parameters=BotParameters(**bot["parameters"]),
-                created_at=bot["created_at"].isoformat(),
-                updated_at=bot["updated_at"].isoformat(),
-                is_active=bot["is_active"]
-            ))
+        # Query custom bots (custom_bots_db)
+        if custom_db:
+            custom_collection = custom_db['bots']
+            cursor = custom_collection.find(query).sort("created_at", -1)
+            custom_bots = await cursor.to_list(length=None)
+            
+            for bot in custom_bots:
+                bot_responses.append(BotResponse(
+                    id=bot["id"],
+                    name=bot["name"],
+                    description=bot["description"],
+                    image=bot["image"],
+                    creator=bot["creator"],
+                    parameters=BotParameters(**bot["parameters"]),
+                    created_at=bot["created_at"].isoformat(),
+                    updated_at=bot["updated_at"].isoformat(),
+                    is_active=bot["is_active"]
+                ))
+        
+        # Sort by created_at descending
+        bot_responses.sort(key=lambda x: x.created_at, reverse=True)
         
         return bot_responses
         
@@ -287,26 +317,40 @@ async def list_bots(
 
 
 @router.get("/{bot_id}", response_model=BotResponse)
-async def get_bot(bot_id: str, db=Depends(get_database)):
+async def get_bot(
+    bot_id: str,
+    marketplace_db=Depends(get_marketplace_database),
+    custom_db=Depends(get_custom_database)
+):
     """
-    Get a specific bot by ID.
+    Get a specific bot by ID from either marketplace or custom database.
     
     Args:
         bot_id: Bot ID
-        db: Database dependency
+        marketplace_db: Marketplace database (bots_db)
+        custom_db: Custom bots database (custom_bots_db)
         
     Returns:
         Bot information
     """
-    if db is None:
+    if marketplace_db is None and custom_db is None:
         raise HTTPException(
             status_code=503,
             detail="Database not available. Bot retrieval requires database connection."
         )
     
     try:
-        collection = db['bots']
-        bot = await collection.find_one({"id": bot_id, "is_active": True})
+        bot = None
+        
+        # First try marketplace database
+        if marketplace_db:
+            collection = marketplace_db['bots']
+            bot = await collection.find_one({"id": bot_id, "is_active": True})
+        
+        # If not found, try custom database
+        if not bot and custom_db:
+            collection = custom_db['bots']
+            bot = await collection.find_one({"id": bot_id, "is_active": True})
         
         if not bot:
             raise HTTPException(status_code=404, detail="Bot not found")
@@ -336,7 +380,8 @@ async def get_bot(bot_id: str, db=Depends(get_database)):
 async def personalize_bot(
     bot_id: str,
     request: PersonalizeBotRequest,
-    db=Depends(get_database)
+    marketplace_db=Depends(get_marketplace_database),
+    custom_db=Depends(get_custom_database)
 ):
     """
     Personalize bot parameters using Claude AI.
@@ -344,12 +389,13 @@ async def personalize_bot(
     Args:
         bot_id: Bot ID to personalize
         request: Personalization request
-        db: Database dependency
+        marketplace_db: Marketplace database (bots_db)
+        custom_db: Custom bots database (custom_bots_db)
         
     Returns:
         Personalization results
     """
-    if db is None:
+    if marketplace_db is None and custom_db is None:
         raise HTTPException(
             status_code=503,
             detail="Database not available. Bot personalization requires database connection."
@@ -358,9 +404,22 @@ async def personalize_bot(
     start_time = time.time()
     
     try:
-        # Get bot from database
-        collection = db['bots']
-        bot = await collection.find_one({"id": bot_id, "is_active": True})
+        # Get bot from database - try custom first, then marketplace
+        bot = None
+        collection = None
+        db = None
+        
+        if custom_db:
+            collection = custom_db['bots']
+            bot = await collection.find_one({"id": bot_id, "is_active": True})
+            if bot:
+                db = custom_db
+        
+        if not bot and marketplace_db:
+            collection = marketplace_db['bots']
+            bot = await collection.find_one({"id": bot_id, "is_active": True})
+            if bot:
+                db = marketplace_db
         
         if not bot:
             raise HTTPException(status_code=404, detail="Bot not found")
@@ -397,7 +456,7 @@ async def personalize_bot(
         # Convert to validated frontend format (clamping applied)
         personalized_frontend_params = validate_and_clamp_parameters(personalized_params)
         
-        # Update bot in database
+        # Update bot in the correct database
         update_data = {
             "parameters": personalized_frontend_params.dict(),  # Clamped/validated values
             "model_type": model_type,
@@ -511,7 +570,8 @@ async def personalize_standalone(
 async def modify_bot(
     bot_id: str,
     request: ModifyBotRequest,
-    db=Depends(get_database)
+    marketplace_db=Depends(get_marketplace_database),
+    custom_db=Depends(get_custom_database)
 ):
     """
     Modify bot parameters interactively using Claude AI.
@@ -519,12 +579,13 @@ async def modify_bot(
     Args:
         bot_id: Bot ID to modify
         request: Modification request
-        db: Database dependency
+        marketplace_db: Marketplace database (bots_db)
+        custom_db: Custom bots database (custom_bots_db)
         
     Returns:
         Modification results
     """
-    if db is None:
+    if marketplace_db is None and custom_db is None:
         raise HTTPException(
             status_code=503,
             detail="Database not available. Bot modification requires database connection."
@@ -533,9 +594,17 @@ async def modify_bot(
     start_time = time.time()
     
     try:
-        # Get bot from database
-        collection = db['bots']
-        bot = await collection.find_one({"id": bot_id, "is_active": True})
+        # Get bot from database - try custom first, then marketplace
+        bot = None
+        collection = None
+        
+        if custom_db:
+            collection = custom_db['bots']
+            bot = await collection.find_one({"id": bot_id, "is_active": True})
+        
+        if not bot and marketplace_db:
+            collection = marketplace_db['bots']
+            bot = await collection.find_one({"id": bot_id, "is_active": True})
         
         if not bot:
             raise HTTPException(status_code=404, detail="Bot not found")
@@ -602,38 +671,59 @@ async def modify_bot(
 
 
 @router.delete("/{bot_id}")
-async def delete_bot(bot_id: str, db=Depends(get_database)):
+async def delete_bot(
+    bot_id: str,
+    marketplace_db=Depends(get_marketplace_database),
+    custom_db=Depends(get_custom_database)
+):
     """
     Soft delete a bot (mark as inactive).
+    Checks both custom and marketplace databases.
     
     Args:
         bot_id: Bot ID to delete
-        db: Database dependency
+        marketplace_db: Marketplace database (bots_db)
+        custom_db: Custom bots database (custom_bots_db)
         
     Returns:
         Deletion confirmation
     """
-    if db is None:
+    if marketplace_db is None and custom_db is None:
         raise HTTPException(
             status_code=503,
             detail="Database not available. Bot deletion requires database connection."
         )
     
     try:
-        collection = db['bots']
+        result = None
         
-        # Soft delete by marking as inactive
-        result = await collection.update_one(
-            {"id": bot_id},
-            {
-                "$set": {
-                    "is_active": False,
-                    "updated_at": datetime.utcnow()
+        # Try custom database first
+        if custom_db:
+            collection = custom_db['bots']
+            result = await collection.update_one(
+                {"id": bot_id},
+                {
+                    "$set": {
+                        "is_active": False,
+                        "updated_at": datetime.utcnow()
+                    }
                 }
-            }
-        )
+            )
         
-        if result.modified_count == 0:
+        # If not found, try marketplace database
+        if (not result or result.modified_count == 0) and marketplace_db:
+            collection = marketplace_db['bots']
+            result = await collection.update_one(
+                {"id": bot_id},
+                {
+                    "$set": {
+                        "is_active": False,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+        
+        if not result or result.modified_count == 0:
             raise HTTPException(status_code=404, detail="Bot not found")
         
         return {"message": "Bot deleted successfully", "bot_id": bot_id}

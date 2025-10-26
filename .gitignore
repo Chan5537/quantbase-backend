@@ -247,3 +247,7 @@ ml_models/models/checkpoints/
 # Trading data exports (comment out if you want to commit small files)
 # ml_models/data/predictions/MASTER_*.csv
 # ml_models/data/predictions/FUTURE_*.csv
+
+# Railway
+.railway/
+.railway.json

@@ -29,7 +29,14 @@ class DatabaseManager:
         
         # Get configuration from environment
         self.mongodb_uri = os.getenv('MONGODB_URI')
-        self.database_name = os.getenv('DATABASE_NAME', 'quantbase')
+        # Hardcoded database names - never use env for these
+        self.marketplace_database_name = "bots_db"  # Marketplace bots
+        self.custom_database_name = "custom_bots_db"  # User-created custom bots
+        self.solana_database_name = "solana_db"  # Trading data/ticks
+        self.user_database_name = "user_management"  # User data
+        
+        # Default database for backward compatibility
+        self.database_name = self.marketplace_database_name
         
         if not self.mongodb_uri:
             print("⚠️  MONGODB_URI not found in environment variables")
@@ -67,7 +74,11 @@ class DatabaseManager:
                 await self.client.admin.command('ping')
                 
                 self.connected = True
-                print(f"✓ Connected to MongoDB: {self.database_name}")
+                print(f"✓ Connected to MongoDB")
+                print(f"  - Marketplace DB: {self.marketplace_database_name}")
+                print(f"  - Custom Bots DB: {self.custom_database_name}")
+                print(f"  - Solana DB: {self.solana_database_name}")
+                print(f"  - User DB: {self.user_database_name}")
                 return True
                 
             except (ConnectionFailure, ServerSelectionTimeoutError) as e:
@@ -119,6 +130,42 @@ class DatabaseManager:
             Database instance or None if not connected
         """
         return self.db if self.connected else None
+    
+    def get_marketplace_database(self) -> Optional[AsyncIOMotorDatabase]:
+        """
+        Get the marketplace database (bots_db) for marketplace bots.
+        
+        Returns:
+            Database instance or None if not connected
+        """
+        return self.client[self.marketplace_database_name] if self.connected else None
+    
+    def get_custom_database(self) -> Optional[AsyncIOMotorDatabase]:
+        """
+        Get the custom bots database (custom_bots_db) for user-created bots.
+        
+        Returns:
+            Database instance or None if not connected
+        """
+        return self.client[self.custom_database_name] if self.connected else None
+    
+    def get_solana_database(self) -> Optional[AsyncIOMotorDatabase]:
+        """
+        Get the solana database (solana_db) for trading data/ticks.
+        
+        Returns:
+            Database instance or None if not connected
+        """
+        return self.client[self.solana_database_name] if self.connected else None
+    
+    def get_user_database(self) -> Optional[AsyncIOMotorDatabase]:
+        """
+        Get the user management database (user_management) for user data.
+        
+        Returns:
+            Database instance or None if not connected
+        """
+        return self.client[self.user_database_name] if self.connected else None
     
     async def save_prediction(
         self,
@@ -281,11 +328,52 @@ db_manager = DatabaseManager()
 async def get_database() -> Optional[AsyncIOMotorDatabase]:
     """
     Dependency injection function for FastAPI routes.
+    Returns the default database (backward compatibility).
     
     Returns:
         Database instance or None
     """
     return db_manager.get_database()
+
+
+async def get_marketplace_database() -> Optional[AsyncIOMotorDatabase]:
+    """
+    Dependency injection function for marketplace database (bots_db).
+    
+    Returns:
+        Database instance or None
+    """
+    return db_manager.get_marketplace_database()
+
+
+async def get_custom_database() -> Optional[AsyncIOMotorDatabase]:
+    """
+    Dependency injection function for custom bots database (custom_bots_db).
+    
+    Returns:
+        Database instance or None
+    """
+    return db_manager.get_custom_database()
+
+
+async def get_solana_database() -> Optional[AsyncIOMotorDatabase]:
+    """
+    Dependency injection function for solana database (solana_db).
+    
+    Returns:
+        Database instance or None
+    """
+    return db_manager.get_solana_database()
+
+
+async def get_user_database() -> Optional[AsyncIOMotorDatabase]:
+    """
+    Dependency injection function for user database (user_management).
+    
+    Returns:
+        Database instance or None
+    """
+    return db_manager.get_user_database()
 
 
 async def ping_database() -> bool:
