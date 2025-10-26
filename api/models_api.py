@@ -344,6 +344,69 @@ async def get_model_info(model_name: str):
         )
 
 
+@router.get("/crypto")
+async def get_crypto_data():
+    """
+    Get available cryptocurrency data and recent predictions.
+    
+    Returns:
+        Available cryptocurrencies and recent prediction data
+        
+    Example:
+        ```
+        GET /api/crypto
+        ```
+    """
+    try:
+        # Mock crypto data for now (you can enhance this later)
+        crypto_data = [
+            {
+                "symbol": "BTC-USD",
+                "name": "Bitcoin",
+                "current_price": 67420.50,
+                "change_24h": 2.45,
+                "change_percentage_24h": 3.77,
+                "market_cap": 1330000000000,
+                "last_updated": datetime.utcnow().isoformat() + 'Z'
+            },
+            {
+                "symbol": "ETH-USD", 
+                "name": "Ethereum",
+                "current_price": 2650.30,
+                "change_24h": 45.20,
+                "change_percentage_24h": 1.73,
+                "market_cap": 318000000000,
+                "last_updated": datetime.utcnow().isoformat() + 'Z'
+            },
+            {
+                "symbol": "SOL-USD",
+                "name": "Solana", 
+                "current_price": 185.75,
+                "change_24h": 8.90,
+                "change_percentage_24h": 5.03,
+                "market_cap": 87000000000,
+                "last_updated": datetime.utcnow().isoformat() + 'Z'
+            }
+        ]
+        
+        # Get available models
+        predictor = get_predictor()
+        available_models = predictor.list_available_models()
+        
+        return {
+            "cryptocurrencies": crypto_data,
+            "available_models": [m['name'] for m in available_models],
+            "total_cryptos": len(crypto_data),
+            "timestamp": datetime.utcnow().isoformat() + 'Z'
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get crypto data: {str(e)}"
+        )
+
+
 @router.get("/history/{model_name}")
 async def get_prediction_history(
     model_name: str,
