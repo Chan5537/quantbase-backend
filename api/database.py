@@ -29,7 +29,7 @@ class DatabaseManager:
         
         # Get configuration from environment
         self.mongodb_uri = os.getenv('MONGODB_URI')
-        self.database_name = os.getenv('DATABASE_NAME', 'quantbase')
+        self.database_name = os.getenv('DATABASE_NAME')
         
         if not self.mongodb_uri:
             print("⚠️  MONGODB_URI not found in environment variables")
